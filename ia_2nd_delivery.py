@@ -44,34 +44,57 @@ def nnaisolver(problemType):
     from keras.utils import to_categorical
 
     # Dictionary to facilitate the relation of each class to a number
-    letters = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'J': 5, 'K': 6, '0': 0, '1': 1}
+    letters = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'J': 5, 'K': 6, '0': 0, '1': 1, 'republican': 0, 'democrat': 1, 'republican\n': 0, 'democrat\n': 1}
 
     # Dictionary to facilitate the relation of each entrance to a file
-    problemFiles = {'character': 'src_caracteres-limpo.csv', 'xor': 'src_problemXOR.csv', 'or': 'src_problemOR.csv', 'and': 'src_problemAND.csv'}
+    problemFiles = {
+        'character': 'src_caracteres-limpo.csv',
+        'xor': 'src_problemXOR.csv',
+        'or': 'src_problemOR.csv',
+        'and': 'src_problemAND.csv',
+        'votes': 'house-votes-84.csv'
+    }
 
-    # Load the train data
+    # Load the generals of the train data dynamically
     X_train = [line.split(',') for line in open(problemFiles[problemType])]
-    X_train[0][0] = X_train[0][0].replace('\ufeff', '')
     rows = len(X_train)
     columns = len(X_train[0])-1
     Y_train = []
 
-    # Treat and format the train data
-    for x in range(0, rows):
-        classRow = X_train[x][-1]
-        classRow = classRow.replace('\n', '')
-        X_train[x].pop()
-        Y_train.append(letters[str(classRow)])
-        for y in range(0, columns):
-            try:
-                int(str(X_train[x][y]))
-                X_train[x][y] = int(str(X_train[x][y]))
-            except ValueError:
-                X_train[x][y] = float(str(X_train[x][y]))
-    X_train = np.array(X_train)
-    Y_train = np.array(Y_train)
+    # Treat specifically the data source of the votes problem, changing the class to numerical and each column value to a number
+    if problemType == 'votes':
+        # Treat and format the train data with 60% of the whole available
+        for x in range(0, 261):
+            classRow = X_train[x][-1]
+            X_train[x].pop()
+            Y_train.append(letters[str(classRow)])
+            for y in range(0, columns):
+                if str(X_train[x][y]) == 'y':
+                    X_train[x][y] = 1
+                elif str(X_train[x][y]) == 'n':
+                    X_train[x][y] = -1
+                else:
+                    X_train[x][y] = 0
+        X_train = X_train[:261]
+        X_train = np.array(X_train)
+        Y_train = np.array(Y_train)
+    # Treat the data for the other problems, changing the string value to a number and the string class as a number
+    else:
+        for x in range(0, rows):
+            classRow = X_train[x][-1]
+            classRow = classRow.replace('\n', '')
+            X_train[x].pop()
+            Y_train.append(letters[str(classRow)])
+            for y in range(0, columns):
+                try:
+                    int(str(X_train[x][y]))
+                    X_train[x][y] = int(str(X_train[x][y]))
+                except ValueError:
+                    X_train[x][y] = float(str(X_train[x][y]))
+        X_train = np.array(X_train)
+        Y_train = np.array(Y_train)
 
-    # Custom configuration options; establish parameters to solve categorical character problem
+    # Custom configuration options; establish parameters to solve categorical character problem and the test data
     if problemType == 'character':
         # Load the test data
         X_test = [line.split(',') for line in open('src_caracteres-ruido.csv')]
@@ -105,6 +128,38 @@ def nnaisolver(problemType):
         # Convert target classes to categorical ones
         Y_train = to_categorical(Y_train, 7)
         Y_test = to_categorical(Y_test, 7)
+
+    # Custom configuration options; establish parameters to solve the binary vote problem and the test data
+    # Obs.: this can get better increasing the batch size and trying harder on the validation_split
+    elif problemType == 'votes':
+        # Load the test data
+        X_test = [line.split(',') for line in open('house-votes-84.csv')]
+        rowsT = len(X_test)
+        columnsT = len(X_test[0]) - 1
+        Y_test = []
+
+        # Treat and format the test data
+        for x in range(261, 435):
+            classRowT = X_test[x][-1]
+            X_test[x].pop()
+            Y_test.append(letters[str(classRowT)])
+            for y in range(0, columnsT):
+                if str(X_test[x][y]) == 'y':
+                    X_test[x][y] = 1
+                elif str(X_test[x][y]) == 'n':
+                    X_test[x][y] = -1
+                else:
+                    X_test[x][y] = 0
+        X_test = X_test[-174:]
+        X_test = np.array(X_test)
+        Y_test = np.array(Y_test)
+
+        accuracy = 'binary_accuracy'
+        validation_split = 0.30
+        loss = 'binary_crossentropy'
+        # batch size is important to apply stochastic gradient descent[sgd]
+        batch = 2
+        output_neurons = 1
 
     # Custom configuration options; establish parameters to solve the binary problems in better performance
     else:
@@ -232,7 +287,10 @@ def nnaisolver(problemType):
     # for the samples over the epochs
     if problemType == 'character':
         test_results = model.evaluate(X_test, Y_test, verbose=1)
-        print(f'Test results for characters - Loss: {test_results[0]} - Accuracy: {test_results[1]}%')
+        print(f'Test results for votes - Loss: {test_results[0]} - Accuracy: {test_results[1]}%')
+    elif problemType == 'votes':
+        test_results = model.evaluate(X_test, Y_test, verbose=1)
+        print(f'Test results for votes - Loss: {test_results[0]} - Accuracy: {test_results[1]}%')
 
     # Predict the results and generate the file for predictions
     # For Keras, the predictions are summarized in a relation between the existent samples and the output neurons,
@@ -258,7 +316,7 @@ if __name__ == '__main__':
         description='''
            For this function to run, it needs a unique argument with a string containing the type of problem to solve
            using the NN MLP algorithm built.
-           Valid entrances are 'character', "xor", "or" and "and"''',
+           Valid entrances are 'character', "xor", "or", "and" and "votes" ''',
         epilog="""Future advanced features will be added later, including new arguments, will be included later""")
     parser.add_argument('problem', type=str, default="notInserted", help='problemToSolve')
     args = parser.parse_args()
@@ -266,9 +324,9 @@ if __name__ == '__main__':
     # Handling the possible arguments passed
     if sys.argv[1] == "-h" or sys.argv[1] == '--help':
         pass
-    elif sys.argv[1] != 'character' and sys.argv[1] != 'xor' and sys.argv[1] != 'or' and sys.argv[1] != 'and':
+    elif sys.argv[1] != 'character' and sys.argv[1] != 'xor' and sys.argv[1] != 'or' and sys.argv[1] != 'and' and sys.argv[1] != 'votes':
        raise ValueError(
-           "Insert a valid entrance: the types of problem that this algorithm solve are 'character', 'xor', 'or' and 'and'")
+           "Insert a valid entrance: the types of problem that this algorithm solve are 'character', 'xor', 'or', 'and' and 'votes'")
     else:
        problemType = sys.argv[1]
        nnaisolver(problemType)
