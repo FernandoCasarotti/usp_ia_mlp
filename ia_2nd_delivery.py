@@ -10,7 +10,26 @@
 import sys
 import argparse
 
-def nnaisolver(problemType):
+from matplotlib.backends.backend_pdf import PdfPages
+
+
+def gradeanalysis():
+    # Define general parameters for the grade-based analysis
+    neurons = [5, 20, 40, 60, 80]
+    lr = [1.0, 0.5, 0.3, 0.1]
+    epochs = [50, 100, 150]
+    count = 1
+
+    # Loop to get an analysis through all the combinations possible
+    for n in neurons:
+        for l in lr:
+            for e in epochs:
+                title = "\nExecution n."+count+" - HiddenNeurons: "+n+"; Lr: "+lr+"; Epochs: "+epochs+"; \n\n"
+                params = {'neuron': n, 'lr': l, 'epoch': e, 'string': title}
+                nnaisolver('votes_grade', params)
+                count = count + 1
+
+def nnaisolver(problemType, params):
 
     # Build  reproducibility
     #  Set a seed value
@@ -42,6 +61,12 @@ def nnaisolver(problemType):
     from keras.models import Sequential
     from keras.layers import Dense
     from keras.utils import to_categorical
+    from keras.optimizers import Adadelta
+    from keras.models import load_model
+    from keras.callbacks import EarlyStopping, ModelCheckpoint
+    from matplotlib import pyplot
+    from keras.wrappers.scikit_learn import KerasClassifier
+    from sklearn.metrics import roc_curve, auc, confusion_matrix, precision_recall_fscore_support
 
     # Dictionary to facilitate the relation of each class to a number
     letters = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'J': 5, 'K': 6, '0': 0, '1': 1, 'republican': 0, 'democrat': 1, 'republican\n': 0, 'democrat\n': 1}
@@ -52,7 +77,10 @@ def nnaisolver(problemType):
         'xor': 'src_problemXOR.csv',
         'or': 'src_problemOR.csv',
         'and': 'src_problemAND.csv',
-        'votes': 'house-votes-84.csv'
+        'votes': 'house-votes-84.csv',
+        'votes_grade': 'house-votes-84.csv',
+        'votes_chosen': 'house-votes-84.csv',
+        'votes_chosen_es': 'house-votes-84.csv'
     }
 
     # Load the generals of the train data dynamically
@@ -62,7 +90,7 @@ def nnaisolver(problemType):
     Y_train = []
 
     # Treat specifically the data source of the votes problem, changing the class to numerical and each column value to a number
-    if problemType == 'votes':
+    if problemType == 'votes' or problemType == 'votes_grade' or problemType == 'votes_chosen' or problemType == 'votes_chosen_es':
         # Treat and format the train data with 60% of the whole available
         for x in range(0, 261):
             classRow = X_train[x][-1]
@@ -131,7 +159,7 @@ def nnaisolver(problemType):
 
     # Custom configuration options; establish parameters to solve the binary vote problem and the test data
     # Obs.: this can get better increasing the batch size and trying harder on the validation_split
-    elif problemType == 'votes':
+    elif problemType == 'votes' or problemType == 'votes_grade' or problemType == 'votes_chosen' or problemType == 'votes_chosen_es':
         # Load the test data
         X_test = [line.split(',') for line in open('house-votes-84.csv')]
         rowsT = len(X_test)
@@ -169,20 +197,25 @@ def nnaisolver(problemType):
         batch = 4
         output_neurons = 1
 
-    # Static configuration options
-    feature_vector_length = columns
-    hidden_shape = 14
-    epochs = 1000
     # Sigmoid activation function, sigmoid(x) = 1 / (1 + exp(-x)
     # Sigmoid is equivalent to a 2-element Softmax, where the second element is assumed to be zero.
     # The sigmoid function always returns a value between 0 and 1
     activator = 'sigmoid'
-    # Adadelta optimization is a stochastic gradient descent method that is based on
-    # adaptive learning rate per dimension
-    # Adadelta is a more robust extension of Adagrad that adapts learning rates based on a moving
-    # window of gradient updates, instead of accumulating all past gradients. This way, Adadelta
-    # continues learning even when many updates have been done.
-    optimizer = 'adadelta'
+    # Static configuration option; personalize it in case of grade analysis, but if not, apply the default
+    feature_vector_length = columns
+    if problemType == 'votes_grade' or problemType == 'votes_chosen' or problemType == 'votes_chosen_es':
+        hidden_shape = params['neuron']
+        epochs = params['epoch']
+        optimizer = Adadelta(lr=params['lr'])
+    else:
+        hidden_shape = 14
+        epochs = 1000
+        # Adadelta optimization is a stochastic gradient descent method that is based on
+        # adaptive learning rate per dimension
+        # Adadelta is a more robust extension of Adagrad that adapts learning rates based on a moving
+        # window of gradient updates, instead of accumulating all past gradients. This way, Adadelta
+        # continues learning even when many updates have been done.
+        optimizer = 'adadelta'
 
     # Create the model with one hidden layer connected to the input layer with the size of the number of columns
     # the output layer connects to the hidden by default, with the size of the output length
@@ -201,7 +234,11 @@ def nnaisolver(problemType):
     nnLr = K.eval(model.optimizer.lr)
 
     # Printing neural network main properties
-    nnParameters = open("nn_parameters.txt", "w+")
+    if problemType == 'votes_grade':
+        nnParameters = open("nn_parameters.txt", "a")
+        nnParameters.write(params['string'])
+    else:
+        nnParameters = open("nn_parameters.txt", "w+")
     nnParameters.writelines(["Number of entrance neurons: %s\n" % feature_vector_length,
                              "Number of hidden neurons: %s\n" % hidden_shape,
                              "Number of exit neurons: %s\n" % output_neurons,
@@ -213,10 +250,15 @@ def nnaisolver(problemType):
                              "Random seed: %s\n" % seed_value])
     nnParameters.close()
 
+
     # Before training the neural-network, print the initial weights of the already built network
     iweights = model.get_weights()
     counti = 0
-    initialWeights = open("initial_Weights.txt", "w+")
+    if problemType == 'votes_grade':
+        initialWeights = open("initial_Weights.txt", "a")
+        initialWeights.write(params['string'])
+    else:
+        initialWeights = open("initial_Weights.txt", "w+")
     # Since the function of weights returns a list of 4 arrays
     # (2 for hidden layer weights and bias, 2 for output layer weights and bias), we loop them but treat then different
     for arr in iweights:
@@ -244,13 +286,29 @@ def nnaisolver(problemType):
     initialWeights.close()
 
     # Execute the training of the neural network, printing the predictions made on each epoch and saving the history
-    # For learning to happen, we need to train our model with sample input/output pairs, such learning is called supervised learning
-    history = model.fit(X_train, Y_train, epochs=epochs, batch_size=batch, verbose=2, validation_split=validation_split)
+    # For learning to happen, we need to train our model with sample input/output pairs,
+    # such learning is called supervised learning
+
+    # If the problem to solve involves early stopping, then stop based on mse but waits 5 epochs to understand if
+    # it gets better; if not, load the best result
+    if problemType == 'votes_chosen_es':
+        history = model.fit(X_train, Y_train, epochs=epochs, batch_size=batch, verbose=2, validation_split=validation_split,
+                            callbacks=[EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=10),
+                                       ModelCheckpoint(filepath='best_model.h5', monitor='val_loss', save_best_only=True)]
+        )
+        model = load_model('best_model.h5')
+    # General case of training
+    else:
+        history = model.fit(X_train, Y_train, epochs=epochs, batch_size=batch, verbose=2, validation_split=validation_split)
 
     # After training the neural network, print the final weights of the already trained network
     fweights = model.get_weights()
     countf = 0
-    finalWeights = open("final_Weights.txt", "w+")
+    if problemType == 'votes_grade':
+        finalWeights = open("final_Weights.txt", "a")
+        finalWeights.write(params['string'])
+    else:
+        finalWeights = open("final_Weights.txt", "w+")
     for arr in fweights:
         if countf == 0:
             finalWeights.write("Hidden layer weights (ixj): \n")
@@ -273,7 +331,11 @@ def nnaisolver(problemType):
         countf = countf+1
     finalWeights.close()
 
-    errors = open("errors.txt", "w+")
+    if problemType == 'votes_grade':
+        errors = open("errors.txt", "a")
+        errors.write(params['string'])
+    else:
+        errors = open("errors.txt", "w+")
     counte = 0
     # The history of errors logged by Keras summarizes the losses of all the neurons of the layers to produce
     # one loss value per epoch (i.e. cost)
@@ -285,18 +347,22 @@ def nnaisolver(problemType):
 
     # Custom testing for categorical problems, feeding the trained model with the test data and calculating the accuracy
     # for the samples over the epochs
-    if problemType == 'character':
+    if problemType == 'character' or problemType == 'votes':
         test_results = model.evaluate(X_test, Y_test, verbose=1)
-        print(f'Test results for votes - Loss: {test_results[0]} - Accuracy: {test_results[1]}%')
-    elif problemType == 'votes':
+        print(f'Test results for {problemType} - Loss: {test_results[0]} - Accuracy: {test_results[1]}%')
+    elif problemType == 'votes_grade' or problemType == 'votes_chosen' or problemType == 'votes_chosen_es':
         test_results = model.evaluate(X_test, Y_test, verbose=1)
-        print(f'Test results for votes - Loss: {test_results[0]} - Accuracy: {test_results[1]}%')
+        print(f'Test results for {problemType} - Loss: {test_results[0]} - Accuracy: {test_results[1]}%')
 
     # Predict the results and generate the file for predictions
     # For Keras, the predictions are summarized in a relation between the existent samples and the output neurons,
     # which means that we have how were the predictions for the other results, not only the actual chosen one
     prediction = model.predict(X_train, verbose=1, batch_size=batch)
-    predictedValues = open("predictions.txt", "w+")
+    if problemType == 'votes_grade':
+        predictedValues = open("predictions.txt", "a")
+        predictedValues.write(params['string'])
+    else:
+        predictedValues = open("predictions.txt", "w+")
     countpx = 0
     for x in prediction:
         predictedValues.write("\nSample %i.\n" % countpx)
@@ -307,8 +373,81 @@ def nnaisolver(problemType):
         countpx = countpx + 1
     predictedValues.close()
 
-    # Just print the main details of the model
-    model.summary()
+    # Plot the relation between loss by epoch in training and validation
+    pyplot.plot(history.history['loss'], label='train')
+    pyplot.plot(history.history['val_loss'], label='test')
+    pyplot.legend()
+    if problemType == 'votes_grade':
+        fig = pyplot.figure()
+        pdf = PdfPages('lossbyEpoch.pdf')
+        pdf.savefig(fig)
+        pdf.close()
+    else:
+        pyplot.show()
+
+    # Plot the ROC curve
+    y_pred_keras = model.predict(X_test, verbose=1, batch_size=batch).ravel()
+    fpr_keras, tpr_keras, thresholds_keras = roc_curve(Y_test, y_pred_keras)
+    auc_keras = auc(fpr_keras, tpr_keras)
+    pyplot.figure(1)
+    pyplot.plot([0, 1], [0, 1], 'k--')
+    pyplot.plot(fpr_keras, tpr_keras, label='Keras (area = {:.3f})'.format(auc_keras))
+    pyplot.xlabel('False positive rate')
+    pyplot.ylabel('True positive rate')
+    pyplot.title('ROC curve')
+    pyplot.legend(loc='best')
+    if problemType == 'votes_grade':
+        figRoc = pyplot.figure()
+        pdfRoc = PdfPages('roc.pdf')
+        pdfRoc.savefig(figRoc)
+        pdfRoc.close()
+    else:
+        pyplot.show()
+
+    # Print the confusion matrix
+    val_predicts = model.predict(X_test)
+    y_pred = [1 * (x[0]>=0.5) for x in val_predicts]
+    cm = confusion_matrix(Y_test, y_pred)
+
+    if problemType == 'votes_grade':
+        precisionValues = open("precision.txt", "a")
+        precisionValues.write(params['string'])
+    else:
+        precisionValues = open("precision.txt", "w+")
+
+    # here we have simple check where we assume that all people are healthy
+    # then, we check what probability we get with dumb guess
+
+    # Normal cases can be counted by summing all labels that are zeros
+    precisionValues.write('Simple guess accuracy was: {:.4f}\n'.format(np.sum(Y_test == 0) / len(Y_test)))
+
+    # Accuracy can be calculated from the confusion matrix by
+    # counting all elements in diagonal (=trace of the matrix)
+    ttAcc = np.trace(cm)/sum(cm)
+    precisionValues.write('Total accuracy was: %s\n' % str(ttAcc))
+
+    # __________ | Not Predicted | Predicted
+    # Not Actual |               |
+    # Yes Actual |               |
+    precisionValues.write('Confusion Matrix:\n')
+    precisionValues.write(cm)
+
+    # Print precision, recall, fscore and support
+    p, r, f, s = precision_recall_fscore_support(Y_test, y_pred)
+
+    np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
+    precisionValues.write('\nSupport:\n')
+    precisionValues.write(s)
+    precisionValues.write('\nPrecision: ')
+    precisionValues.write(p)
+    precisionValues.write('\nRecall: ')
+    precisionValues.write(r)
+    precisionValues.write('\nF-score: ')
+    precisionValues.write(f)
+    precisionValues.write('\n')
+
+    precisionValues.close()
+
 
 if __name__ == '__main__':
     # A little argparse to create a carefully help description for the function
@@ -316,17 +455,23 @@ if __name__ == '__main__':
         description='''
            For this function to run, it needs a unique argument with a string containing the type of problem to solve
            using the NN MLP algorithm built.
-           Valid entrances are 'character', "xor", "or", "and" and "votes" ''',
+           Valid entrances are 'character', "xor", "or", "and", "votes", "votes_grade", "votes_chosen" and "votes_chosen_es" ''',
         epilog="""Future advanced features will be added later, including new arguments, will be included later""")
     parser.add_argument('problem', type=str, default="notInserted", help='problemToSolve')
     args = parser.parse_args()
 
     # Handling the possible arguments passed
-    if sys.argv[1] == "-h" or sys.argv[1] == '--help':
+    problemType = sys.argv[1]
+    if problemType == "-h" or problemType == '--help':
         pass
-    elif sys.argv[1] != 'character' and sys.argv[1] != 'xor' and sys.argv[1] != 'or' and sys.argv[1] != 'and' and sys.argv[1] != 'votes':
+    elif problemType == 'votes_grade':
+        gradeanalysis()
+    elif problemType == 'votes_chosen_es' or problemType == 'votes_chosen':
+        params = {'neuron': 40, 'lr': 1.0, 'epoch': 50}
+        nnaisolver(problemType, params)
+    elif problemType != 'character' and problemType != 'xor' and problemType != 'or' and problemType != 'and' and problemType != 'votes' and problemType != 'votes_grade' and problemType != 'votes_chosen_es' and problemType != 'votes_chosen':
        raise ValueError(
-           "Insert a valid entrance: the types of problem that this algorithm solve are 'character', 'xor', 'or', 'and' and 'votes'")
+           "Insert a valid entrance: the types of problem that this algorithm solve are 'character','xor', 'or', 'and', 'votes', 'votes_grade', 'votes_chosen' and 'votes_chosen_es'")
     else:
-       problemType = sys.argv[1]
-       nnaisolver(problemType)
+        params = {}
+        nnaisolver(problemType, params)
