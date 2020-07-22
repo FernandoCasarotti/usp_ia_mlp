@@ -455,6 +455,9 @@ def nnaisolver(problemType, params):
     # Print precision, recall, fscore and support
     p, r, f, s = precision_recall_fscore_support(Y_test, y_pred)
 
+    if problemType == 'characters' or problemType == 'votes' or problemType == 'votes_grade' or problemType == 'votes_chosen' or problemType == 'votes_chosen_es':
+        stringTestResult = '\nTest results for '+str(problemType)+' - Loss: '+str(test_results[0])+' - Accuracy: '+str(test_results[1])+'%\n'
+        precisionValues.write(stringTestResult)
     np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
     precisionValues.write('\nSupport:\n')
     precisionValues.write(str(s))
