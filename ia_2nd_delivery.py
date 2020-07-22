@@ -24,7 +24,7 @@ def gradeanalysis():
     for n in neurons:
         for l in lr:
             for e in epochs:
-                title = "\nExecution n."+count+" - HiddenNeurons: "+n+"; Lr: "+lr+"; Epochs: "+epochs+"; \n\n"
+                title = "\nExecution n."+str(count)+" - HiddenNeurons: "+str(n)+"; Lr: "+str(l)+"; Epochs: "+str(e)+"; \n\n"
                 params = {'neuron': n, 'lr': l, 'epoch': e, 'string': title}
                 nnaisolver('votes_grade', params)
                 count = count + 1
@@ -67,6 +67,7 @@ def nnaisolver(problemType, params):
     from matplotlib import pyplot
     from keras.wrappers.scikit_learn import KerasClassifier
     from sklearn.metrics import roc_curve, auc, confusion_matrix, precision_recall_fscore_support
+    from matplotlib.backends.backend_pdf import PdfPages
 
     # Dictionary to facilitate the relation of each class to a number
     letters = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'J': 5, 'K': 6, '0': 0, '1': 1, 'republican': 0, 'democrat': 1, 'republican\n': 0, 'democrat\n': 1}
@@ -373,35 +374,52 @@ def nnaisolver(problemType, params):
         countpx = countpx + 1
     predictedValues.close()
 
-    # Plot the relation between loss by epoch in training and validation
-    pyplot.plot(history.history['loss'], label='train')
-    pyplot.plot(history.history['val_loss'], label='test')
-    pyplot.legend()
     if problemType == 'votes_grade':
-        fig = pyplot.figure()
-        pdf = PdfPages('lossbyEpoch.pdf')
-        pdf.savefig(fig)
-        pdf.close()
+        # Plot the relation between loss by epoch in training and validation
+        with PdfPages('lossByEpoch.pdf') as pdfL:
+            pyplot.figure(1)
+            pyplot.plot(history.history['loss'], label='train')
+            pyplot.plot(history.history['val_loss'], label='test')
+            pyplot.xlabel('Loss')
+            pyplot.ylabel('Epoch')
+            pyplot.legend()
+            titleString = 'Loss by Epoch (' + params['string'] + ')'
+            pyplot.title(titleString)
+            pdfL.savefig()
+            pyplot.close()
     else:
+        pyplot.figure(1)
+        pyplot.plot(history.history['loss'], label='train')
+        pyplot.plot(history.history['val_loss'], label='test')
+        pyplot.xlabel('Loss')
+        pyplot.ylabel('Epoch')
+        pyplot.legend()
+        pyplot.title('Loss by Epoch')
         pyplot.show()
 
     # Plot the ROC curve
     y_pred_keras = model.predict(X_test, verbose=1, batch_size=batch).ravel()
     fpr_keras, tpr_keras, thresholds_keras = roc_curve(Y_test, y_pred_keras)
     auc_keras = auc(fpr_keras, tpr_keras)
-    pyplot.figure(1)
-    pyplot.plot([0, 1], [0, 1], 'k--')
-    pyplot.plot(fpr_keras, tpr_keras, label='Keras (area = {:.3f})'.format(auc_keras))
-    pyplot.xlabel('False positive rate')
-    pyplot.ylabel('True positive rate')
-    pyplot.title('ROC curve')
-    pyplot.legend(loc='best')
     if problemType == 'votes_grade':
-        figRoc = pyplot.figure()
-        pdfRoc = PdfPages('roc.pdf')
-        pdfRoc.savefig(figRoc)
-        pdfRoc.close()
+        with PdfPages('roc.pdf') as pdf:
+            pyplot.figure(1)
+            pyplot.plot([0, 1], [0, 1], 'k--')
+            pyplot.plot(fpr_keras, tpr_keras, label='Keras (area = {:.3f})'.format(auc_keras))
+            pyplot.xlabel('False positive rate')
+            pyplot.ylabel('True positive rate')
+            pyplot.legend(loc='best')
+            pyplot.title('ROC curve ('+params['string']+')')
+            pdf.savefig()  # saves the current figure into a pdf page
+            pyplot.close()
     else:
+        pyplot.figure(1)
+        pyplot.plot([0, 1], [0, 1], 'k--')
+        pyplot.plot(fpr_keras, tpr_keras, label='Keras (area = {:.3f})'.format(auc_keras))
+        pyplot.xlabel('False positive rate')
+        pyplot.ylabel('True positive rate')
+        pyplot.legend(loc='best')
+        pyplot.title('ROC curve')
         pyplot.show()
 
     # Print the confusion matrix
@@ -423,7 +441,9 @@ def nnaisolver(problemType, params):
 
     # Accuracy can be calculated from the confusion matrix by
     # counting all elements in diagonal (=trace of the matrix)
-    ttAcc = np.trace(cm)/sum(cm)
+    traceCm = np.trace(cm)
+    sumCm = sum(cm)
+    ttAcc = traceCm / sumCm
     precisionValues.write('Total accuracy was: %s\n' % str(ttAcc))
 
     # __________ | Not Predicted | Predicted
