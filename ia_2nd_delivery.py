@@ -430,20 +430,20 @@ def nnaisolver(problemType, params):
     # Not Actual |               |
     # Yes Actual |               |
     precisionValues.write('Confusion Matrix:\n')
-    precisionValues.write(cm)
+    precisionValues.write(str(cm))
 
     # Print precision, recall, fscore and support
     p, r, f, s = precision_recall_fscore_support(Y_test, y_pred)
 
     np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
     precisionValues.write('\nSupport:\n')
-    precisionValues.write(s)
+    precisionValues.write(str(s))
     precisionValues.write('\nPrecision: ')
-    precisionValues.write(p)
+    precisionValues.write(str(p))
     precisionValues.write('\nRecall: ')
-    precisionValues.write(r)
+    precisionValues.write(str(r))
     precisionValues.write('\nF-score: ')
-    precisionValues.write(f)
+    precisionValues.write(str(f))
     precisionValues.write('\n')
 
     precisionValues.close()
